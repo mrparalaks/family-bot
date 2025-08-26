@@ -1,0 +1,26 @@
+# Виртуальное окружение
+.venv/
+venv/
+
+# Python-кэши
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+
+# Инструменты и ОС
+*.swp
+.DS_Store
+Thumbs.db
+
+# IDE/редакторы
+.vscode/
+.idea
+.python-version
+
+# Тестовые и типизационные кэши
+.pytest_cache/
+.mypy_cache/
+
+# Секреты
+.env
