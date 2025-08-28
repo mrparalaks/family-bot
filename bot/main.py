@@ -21,6 +21,21 @@ dp = Dispatcher()
 async def cmd_start(message: Message) -> None:
     await message.answer("Привет! 👋 Я семейный бот. Готов к работе.")
 
+# Хэндлер на команду /help
+@dp.message(Command("help"))
+async def cmd_help(message: Message) -> None:
+    await message.answer(
+        "Я могу выполнять такие команды:\n"
+        "/start - приветствие\n"
+        "/help - список команд\n\n"
+        "А ещё я повторю любое твоё сообщение."
+    )
+
+# Хэндлер для любого текста (эхо)
+@dp.message()
+async def echo_message(message: Message) -> None:
+    await message.answer(f"Ты сказал: {message.text}")
+
 # Точка входа: запуск long polling
 async def main() -> None:
     await dp.start_polling(bot)
