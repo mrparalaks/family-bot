@@ -4,6 +4,7 @@ from aiogram.filters import Command
 from aiogram.types import Message
 import os
 from dotenv import load_dotenv
+from bot.handlers.weather import router as weather_router
 
 # Загружаем переменные окружения из .env
 load_dotenv()
@@ -39,6 +40,9 @@ async def echo_message(message: Message) -> None:
 # Точка входа: запуск long polling
 async def main() -> None:
     await dp.start_polling(bot)
+
+# Подключаем погодный router к Dispatcher
+dp.include_router(weather_router)
 
 if __name__ == "__main__":
     asyncio.run(main())
