@@ -61,10 +61,10 @@ async def fetch_forecast(city: str, days: int = 3, units: str = "metric", lang: 
 
     url = f"{BASE_URL}/forecast"
     params = {
-        "q" = city,
-        "appid" = WEATHER_API_KEY,
-        "units" = units,
-        "lang" = lang,
+        "q": city,
+        "appid": WEATHER_API_KEY,
+        "units": units,
+        "lang": lang,
         "cnt": days * 8
     }
 
