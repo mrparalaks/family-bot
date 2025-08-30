@@ -1,5 +1,5 @@
 import asyncio
-from aiogram import Bot, Dispatcher, types
+from aiogram import Bot, Dispatcher
 from aiogram.filters import Command
 from aiogram.types import Message
 import os
@@ -12,35 +12,43 @@ load_dotenv()
 # Читаем токен бота из переменных окружения
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 if not BOT_TOKEN:
-    raise RuntimeError("Переменная окружения BOT_TOKEN не задана. Создай файл .env и добавь BOT_TOKEN=твой_реальный_токен")
+    raise RuntimeError(
+        "Переменная окружения BOT_TOKEN не задана. "
+        "Создай файл .env и добавь BOT_TOKEN='твой_реальный_токен'"
+    )
 
+# Создаём экземпляры бота и диспетчера
 bot = Bot(token=BOT_TOKEN)
 dp = Dispatcher()
 
-# Хэндлер на комнаду /start
+# --- Хэндлер на команду /start ---
 @dp.message(Command("start"))
 async def cmd_start(message: Message) -> None:
     await message.answer("Привет! 👋 Я семейный бот. Готов к работе.")
 
-# Хэндлер на команду /help
+# --- Хэндлер на команду /help ---
 @dp.message(Command("help"))
 async def cmd_help(message: Message) -> None:
     await message.answer(
         "Я могу выполнять такие команды:\n"
         "/start - приветствие\n"
         "/help - список команд\n\n"
-        "А ещё я повторю любое твоё сообщение."
+        "/weather - укажи город и узнай текущую погоду"
     )
 
-# Подключаем погодный router к Dispatcher
+# --- Подключаем погодный router ---
 dp.include_router(weather_router)
 
-# Хэндлер для любого текста (эхо)
-@dp.message()
+# --- Эхо-хэндлер для обычного текста ---
+@dp.message(lambda message: not message.text.startswith("/"))
 async def echo_message(message: Message) -> None:
+    """
+    Отправляет обратно любое текстовое сообщение,
+    кроме команд (начинающихся с /).
+    """
     await message.answer(f"Ты сказал: {message.text}")
 
-# Точка входа: запуск long polling
+# --- Точка входа: запуск long polling ---
 async def main() -> None:
     await dp.start_polling(bot)
 
