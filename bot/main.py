@@ -32,6 +32,9 @@ async def cmd_help(message: Message) -> None:
         "А ещё я повторю любое твоё сообщение."
     )
 
+# Подключаем погодный router к Dispatcher
+dp.include_router(weather_router)
+
 # Хэндлер для любого текста (эхо)
 @dp.message()
 async def echo_message(message: Message) -> None:
@@ -40,9 +43,6 @@ async def echo_message(message: Message) -> None:
 # Точка входа: запуск long polling
 async def main() -> None:
     await dp.start_polling(bot)
-
-# Подключаем погодный router к Dispatcher
-dp.include_router(weather_router)
 
 if __name__ == "__main__":
     asyncio.run(main())
