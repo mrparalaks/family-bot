@@ -2,6 +2,7 @@ import aiohttp
 import os
 import time
 from dotenv import load_dotenv
+from datetime import datetime
 
 
 # Загружаем переменные окружения (.env)
@@ -95,3 +96,37 @@ def format_weather(data: dict) -> str:
         f"🤔 Ощущается как: {feels_like}°C\n"
         f"☁️ {description.capitalize()}"
     )
+
+def format_forecast(data: dict) -> str:
+    """
+    Форматируем прогноз на несколько дней.
+    """
+    cod = str(data.get("cod", ""))
+    if cod != "200":
+        # OpenWeather иногда возвращает: {"cod": "404", "message": "city not found"}
+        message = data.get("message", "не удалось получить данные")
+        return f"⚠️ Ошибка: {message}"
+
+    city = data["city"]["name"]
+    forecast_list = data["list"]
+
+    # Берём каждые 8 записей (~24 часа, т.к. шаг прогноза 3 часа)
+    days = forecast_list[::8]
+
+    if not days:
+        return f"⚠️ Не удалось получить прогноз для {city}"
+
+    lines = [f"📅 Прогноз погоды для города {city}:"]
+    for item in days:
+        dt = datetime.fromtimestamp(item["dt"]).strftime("%d.%m %H:%M")
+        temp = round(item["main"]["temp"])
+        feels_like = round(item["main"]["feels_like"])
+        description = item["weather"][0]["description"].capitalize()
+        lines.append(
+            f"\n📍 {dt}\n"
+            f"🌡 Температура: {temp}°C\n"
+            f"🤔 Ощущается как: {feels_like}°C\n"
+            f"☁️ {description}"
+        )
+
+    return "\n".join(lines)
