@@ -1,9 +1,11 @@
 import aiohttp
+import asyncio
+import json
 import os
 import time
 from dotenv import load_dotenv
 from datetime import datetime
-from aiohttp.client_exceptions import ClientError
+from aiohttp.client_exceptions import ClientError, ContentTypeError
 
 # Загружаем переменные окружения (.env)
 load_dotenv()
@@ -18,39 +20,31 @@ if not WEATHER_API_KEY:
 
 BASE_URL = "https://api.openweathermap.org/data/2.5"
 
-
-# ---------- Кэш ----------
-
-class Cache:
-    """Простой кэш с TTL (time-to-live)."""
-
-    def __init__(self, ttl: int = 600):
-        self._storage = {}
-        self._ttl = ttl
-
-    def get(self, key: tuple):
-        """Получить данные из кэша, если не устарели."""
-        now = time.time()
-        if key in self._storage:
-            ts, data = self._storage[key]
-            if now - ts < self._ttl:
-                return data
-        return None
-
-    def set(self, key: tuple, data: dict):
-        """Сохранить данные в кэш."""
-        self._storage[key] = (time.time(), data)
+# Кэш
+__cache = {}
+CACHE_TTL = 600  # 10 минут
 
 
-# Создаём единый экземпляр кэша
-cache = Cache(ttl=600)
+# ---------- Вспомогательные функции ----------
+
+def _get_from_cache(key: tuple):
+    """Получение данных из кэша (если не протух)."""
+    now = time.time()
+    if key in __cache:
+        ts, data = __cache[key]
+        if now - ts < CACHE_TTL:
+            return data
+    return None
 
 
-# ---------- Универсальная функция запроса ----------
+def _save_to_cache(key: tuple, data: dict):
+    """Сохраняем данные в кэш."""
+    __cache[key] = (time.time(), data)
+
 
 async def _fetch(endpoint: str, params: dict, cache_key: tuple) -> dict:
-    """Универсальный запрос к OpenWeather с кэшем и обработкой ошибок."""
-    cached = cache.get(cache_key)
+    """Универсальная функция запросов к OpenWeather с кэшем и обработкой ошибок."""
+    cached = _get_from_cache(cache_key)
     if cached:
         return cached
 
@@ -60,12 +54,18 @@ async def _fetch(endpoint: str, params: dict, cache_key: tuple) -> dict:
     try:
         async with aiohttp.ClientSession() as session:
             async with session.get(url, params=params, timeout=10) as response:
-                data = await response.json()
+                try:
+                    data = await response.json()
+                except (ContentTypeError, json.JSONDecodeError):
+                    return {"cod": "500", "message": "Некорректный ответ от сервера"}
 
                 if response.status == 200:
-                    cache.set(cache_key, data)
+                    _save_to_cache(cache_key, data)
 
                 return data
+
+    except asyncio.TimeoutError:
+        return {"cod": "500", "message": "Превышено время ожидания ответа"}
     except ClientError as e:
         return {"cod": "500", "message": f"Ошибка сети: {e}"}
     except Exception as e:
@@ -119,7 +119,7 @@ def format_forecast(data: dict) -> str:
     city = data["city"]["name"]
     forecast_list = data["list"]
 
-    # Берём каждые 8 записей (~раз в сутки, т.к. шаг прогноза 3 часа)
+    # Берём каждые 8 записей (~раз в сутки)
     days = forecast_list[::8]
 
     if not days:
