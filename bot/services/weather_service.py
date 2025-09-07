@@ -18,31 +18,39 @@ if not WEATHER_API_KEY:
 
 BASE_URL = "https://api.openweathermap.org/data/2.5"
 
-# Кэш
-__cache = {}
-CACHE_TTL = 600  # 10 минут
+
+# ---------- Кэш ----------
+
+class Cache:
+    """Простой кэш с TTL (time-to-live)."""
+
+    def __init__(self, ttl: int = 600):
+        self._storage = {}
+        self._ttl = ttl
+
+    def get(self, key: tuple):
+        """Получить данные из кэша, если не устарели."""
+        now = time.time()
+        if key in self._storage:
+            ts, data = self._storage[key]
+            if now - ts < self._ttl:
+                return data
+        return None
+
+    def set(self, key: tuple, data: dict):
+        """Сохранить данные в кэш."""
+        self._storage[key] = (time.time(), data)
 
 
-# ---------- Вспомогательные функции ----------
-
-def _get_from_cache(key: tuple):
-    """Получение данных из кэша (если не протух)."""
-    now = time.time()
-    if key in __cache:
-        ts, data = __cache[key]
-        if now - ts < CACHE_TTL:
-            return data
-    return None
+# Создаём единый экземпляр кэша
+cache = Cache(ttl=600)
 
 
-def _save_to_cache(key: tuple, data: dict):
-    """Сохраняем данные в кэш."""
-    __cache[key] = (time.time(), data)
-
+# ---------- Универсальная функция запроса ----------
 
 async def _fetch(endpoint: str, params: dict, cache_key: tuple) -> dict:
-    """Универсальная функция запросов к OpenWeather с кэшем и обработкой ошибок."""
-    cached = _get_from_cache(cache_key)
+    """Универсальный запрос к OpenWeather с кэшем и обработкой ошибок."""
+    cached = cache.get(cache_key)
     if cached:
         return cached
 
@@ -55,7 +63,7 @@ async def _fetch(endpoint: str, params: dict, cache_key: tuple) -> dict:
                 data = await response.json()
 
                 if response.status == 200:
-                    _save_to_cache(cache_key, data)
+                    cache.set(cache_key, data)
 
                 return data
     except ClientError as e:
@@ -111,7 +119,7 @@ def format_forecast(data: dict) -> str:
     city = data["city"]["name"]
     forecast_list = data["list"]
 
-    # Берём каждые 8 записей (~раз в сутки)
+    # Берём каждые 8 записей (~раз в сутки, т.к. шаг прогноза 3 часа)
     days = forecast_list[::8]
 
     if not days:
