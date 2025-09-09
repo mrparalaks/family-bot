@@ -12,6 +12,7 @@ GIPHY_RANDOM_URL = "https://api.giphy.com/v1/gifs/random"
 async def fetch_random_gif(tag: str = None) -> str:
     """
     Получает случайную GIF с Giphy.
+    Если указан тег — по теме.
     Возвращает URL картинки или None, если не удалось.
     """
     params = {
