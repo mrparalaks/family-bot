@@ -7,6 +7,8 @@ import os
 from bot.handlers.weather import router as weather_router
 from bot.handlers.forecast import router as forecast_router
 from bot.handlers.nextday import router as nextday_router
+from bot.handlers.gif import router as gif_router
+
 
 # Загружаем переменные окружения из .env
 load_dotenv()
@@ -35,13 +37,16 @@ async def cmd_help(message: types.Message) -> None:
         "/help - список команд\n\n"
         "/weather <город> - текущая погода\n"
         "/forecast <город> - прогноз на 3 дня\n"
-        "/nextday <город> - прогноз на следующий день с шагом 3 часа"
+        "/nextday <город> - прогноз на следующий день с шагом 3 часа\n"
+        "/gif - случайная гифка"
+
     )
 
 # --- Подключаем роутеры ---
 dp.include_router(weather_router)
 dp.include_router(forecast_router)
 dp.include_router(nextday_router)
+dp.include_router(gif_router)
 
 # --- Эхо-хэндлер для обычного текста ---
 @dp.message(lambda message: not message.text.startswith("/"))
