@@ -1,57 +1,56 @@
 import asyncio
-from aiogram import Bot, Dispatcher
+from aiogram import Bot, Dispatcher, types
 from aiogram.filters import Command
-from aiogram.types import Message
-import os
 from dotenv import load_dotenv
+import os
+
 from bot.handlers.weather import router as weather_router
+from bot.handlers.forecast import router as forecast_router
+from bot.handlers.nextday import router as nextday_router
 
 # Загружаем переменные окружения из .env
 load_dotenv()
 
-# Читаем токен бота из переменных окружения
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 if not BOT_TOKEN:
     raise RuntimeError(
-        "Переменная окружения BOT_TOKEN не задана. "
-        "Создай файл .env и добавь BOT_TOKEN='твой_реальный_токен'"
+        "❌ Переменная окружения BOT_TOKEN не задана. "
+        "Создай файл .env и добавь BOT_TOKEN='твой_токен'"
     )
 
-# Создаём экземпляры бота и диспетчера
 bot = Bot(token=BOT_TOKEN)
 dp = Dispatcher()
 
-# --- Хэндлер на команду /start ---
+# --- Команда /start ---
 @dp.message(Command("start"))
-async def cmd_start(message: Message) -> None:
+async def cmd_start(message: types.Message) -> None:
     await message.answer("Привет! 👋 Я семейный бот. Готов к работе.")
 
-# --- Хэндлер на команду /help ---
+# --- Команда /help ---
 @dp.message(Command("help"))
-async def cmd_help(message: Message) -> None:
+async def cmd_help(message: types.Message) -> None:
     await message.answer(
         "Я могу выполнять такие команды:\n"
         "/start - приветствие\n"
         "/help - список команд\n\n"
         "/weather <город> - текущая погода\n"
-        "/forecast <город> - прогноз на 3 дня"
+        "/forecast <город> - прогноз на 3 дня\n"
+        "/nextday <город> - прогноз на следующий день с шагом 3 часа"
     )
 
-# --- Подключаем погодный router ---
+# --- Подключаем роутеры ---
 dp.include_router(weather_router)
+dp.include_router(forecast_router)
+dp.include_router(nextday_router)
 
 # --- Эхо-хэндлер для обычного текста ---
 @dp.message(lambda message: not message.text.startswith("/"))
-async def echo_message(message: Message) -> None:
-    """
-    Отправляет обратно любое текстовое сообщение,
-    кроме команд (начинающихся с /).
-    """
+async def echo_message(message: types.Message) -> None:
     await message.answer(f"Ты сказал: {message.text}")
 
-# --- Точка входа: запуск long polling ---
+# --- Точка входа ---
 async def main() -> None:
-    await dp.start_polling(bot, drop_pending_updates=True)
+    await dp.start_polling(bot, skip_updates=True)  # skip_updates=True -> не обрабатываем старые апдейты
 
 if __name__ == "__main__":
     asyncio.run(main())

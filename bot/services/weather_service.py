@@ -2,8 +2,8 @@ import aiohttp
 import os
 import time
 from dotenv import load_dotenv
-from datetime import datetime
-from aiohttp.client_exceptions import ClientError, ClientConnectorError
+from datetime import datetime, timedelta
+from aiohttp.client_exceptions import ClientError, ClientConnectionError, ClientPayloadError
 
 # Загружаем переменные окружения (.env)
 load_dotenv()
@@ -18,7 +18,7 @@ if not WEATHER_API_KEY:
 
 BASE_URL = "https://api.openweathermap.org/data/2.5"
 
-# Единый кэш
+# Кэш
 __cache = {}
 CACHE_TTL = 600  # 10 минут
 
@@ -54,14 +54,14 @@ async def _fetch(endpoint: str, params: dict, cache_key: tuple) -> dict:
             async with session.get(url, params=params, timeout=10) as response:
                 try:
                     data = await response.json()
-                except Exception as e:
-                    return {"cod": "500", "message": f"Ошибка разбора ответа JSON: {e}"}
+                except Exception:
+                    return {"cod": "500", "message": "Ошибка обработки JSON от сервера"}
 
                 if response.status == 200:
                     _save_to_cache(cache_key, data)
 
                 return data
-    except (ClientError, ClientConnectorError) as e:
+    except (ClientError, ClientConnectionError, ClientPayloadError) as e:
         return {"cod": "500", "message": f"Ошибка сети: {e}"}
     except Exception as e:
         return {"cod": "500", "message": f"Неизвестная ошибка: {e}"}
@@ -87,6 +87,18 @@ async def fetch_forecast(city: str, days: int = 3, units: str = "metric", lang: 
     )
 
 
+async def fetch_nextday(city: str, units: str = "metric", lang: str = "ru") -> dict:
+    """
+    Прогноз на следующий день с шагом 3 часа (6, 9, 12, 15, 18, 21, 24 часа).
+    """
+    data = await _fetch(
+        "forecast",
+        {"q": city, "units": units, "lang": lang},
+        (city.lower(), "nextday")
+    )
+    return data
+
+
 # ---------- Форматирование ----------
 
 def format_weather(data: dict) -> str:
@@ -98,52 +110,80 @@ def format_weather(data: dict) -> str:
     temp = round(data["main"]["temp"])
     feels_like = round(data["main"]["feels_like"])
     description = data["weather"][0]["description"].capitalize()
-    humidity = data["main"].get("humidity")
-    wind_speed = data.get("wind", {}).get("speed")
 
-    lines = [
-        f"🌍 Город: {city}",
-        f"🌡 Температура: {temp}°C (ощущается как {feels_like}°C)",
+    return (
+        f"🌍 Город: {city}\n"
+        f"🌡 Температура: {temp}°C\n"
+        f"🤔 Ощущается как: {feels_like}°C\n"
         f"☁️ {description}"
-    ]
-
-    if humidity is not None:
-        lines.append(f"💧 Влажность: {humidity}%")
-    if wind_speed is not None:
-        lines.append(f"💨 Ветер: {wind_speed} м/с")
-
-    return "\n".join(lines)
+    )
 
 
 def format_forecast(data: dict) -> str:
-    """Форматирование прогноза на несколько дней (~каждые 24 часа)."""
+    """Форматирование прогноза на несколько дней."""
     if str(data.get("cod")) != "200":
         return f"⚠️ Ошибка: {data.get('message', 'не удалось получить данные')}"
 
     city = data["city"]["name"]
     forecast_list = data["list"]
-    days = forecast_list[::8]  # каждые 8 записей ~24 часа
+
+    # Берём каждые 8 записей (~раз в сутки)
+    days = forecast_list[::8]
 
     if not days:
         return f"⚠️ Не удалось получить прогноз для {city}"
 
-    lines = [f"📅 Прогноз погоды для города {city}:"]
+    lines = [f"📅 Прогноз погоды: {city}"]
     for item in days:
-        dt = datetime.fromtimestamp(item["dt"]).strftime("%d.%m (%a) %H:%M")
+        dt = datetime.fromtimestamp(item["dt"]).strftime("%d.%m %H:%M")
         temp = round(item["main"]["temp"])
         feels_like = round(item["main"]["feels_like"])
         description = item["weather"][0]["description"].capitalize()
-        humidity = item["main"].get("humidity")
-        wind_speed = item.get("wind", {}).get("speed")
-
         lines.append(
             f"\n📍 {dt}\n"
-            f"🌡 Температура: {temp}°C (ощущается как {feels_like}°C)\n"
+            f"🌡 {temp}°C (ощущается как {feels_like}°C)\n"
             f"☁️ {description}"
         )
-        if humidity is not None:
-            lines[-1] += f"\n💧 Влажность: {humidity}%"
-        if wind_speed is not None:
-            lines[-1] += f"\n💨 Ветер: {wind_speed} м/с"
+
+    return "\n".join(lines)
+
+
+def format_nextday(data: dict) -> str:
+    """Форматирование прогноза на следующий день с шагом 3 часа."""
+    if str(data.get("cod")) != "200":
+        return f"⚠️ Ошибка: {data.get('message', 'не удалось получить данные')}"
+
+    city = data["city"]["name"]
+    forecast_list = data["list"]
+
+    if not forecast_list:
+        return f"⚠️ Не удалось получить прогноз для {city}"
+
+    # Определяем следующие 24 часа от текущего времени
+    now = datetime.now()
+    next_day = now + timedelta(days=1)
+    next_day_start = datetime(next_day.year, next_day.month, next_day.day)
+    next_day_end = next_day_start + timedelta(hours=24)
+
+    # Фильтруем только данные следующего дня
+    items_next_day = [
+        item for item in forecast_list
+        if next_day_start <= datetime.fromtimestamp(item["dt"]) < next_day_end
+    ]
+
+    if not items_next_day:
+        return f"⚠️ Не удалось получить данные для следующего дня в {city}"
+
+    lines = [f"📅 Прогноз погоды на следующий день: {city}"]
+    for item in items_next_day:
+        dt = datetime.fromtimestamp(item["dt"]).strftime("%H:%M")
+        temp = round(item["main"]["temp"])
+        feels_like = round(item["main"]["feels_like"])
+        description = item["weather"][0]["description"].capitalize()
+        lines.append(
+            f"\n📍 {dt}\n"
+            f"🌡 {temp}°C (ощущается как {feels_like}°C)\n"
+            f"☁️ {description}"
+        )
 
     return "\n".join(lines)
