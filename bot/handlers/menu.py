@@ -139,3 +139,11 @@ async def send_gif_by_tag(message: types.Message, state: FSMContext):
     else:
         await message.answer("Увы, ничего не нашлось 😢 Попробуй другой тег.",
                              reply_markup=get_back_to_menu_keyboard())
+
+# --- Хэндлер для непонятного текста ---
+@router.message()
+async def unknown_text(message: types.Message):
+    await message.answer(
+        "Команда не понятна 😅 Выбери действие:",
+        reply_markup=get_back_to_menu_keyboard()
+    )
