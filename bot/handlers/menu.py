@@ -25,16 +25,39 @@ class GifStates(StatesGroup):
 
 
 # --- Главное меню ---
-@router.message(CommandStart())
-async def start(message: types.Message):
-    keyboard = InlineKeyboardMarkup(inline_keyboard=[
+def get_main_menu():
+    """Возвращает клавиатуру с основными функциями бота"""
+    return InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="Текущая погода", callback_data="weather")],
         [InlineKeyboardButton(text="Прогноз на завтра", callback_data="nextday")],
         [InlineKeyboardButton(text="Прогноз на 3 дня", callback_data="forecast")],
         [InlineKeyboardButton(text="Гифка по теме", callback_data="gif_tag")],
         [InlineKeyboardButton(text="Случайная гифка", callback_data="gif_random")],
     ])
-    await message.answer("Привет 👋\nВыбери, что тебя интересует:", reply_markup=keyboard)
+
+
+def get_back_to_menu_keyboard():
+    """Возвращает клавиатуру с одной кнопкой 'Главное меню'"""
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="Главное меню", callback_data="show_main_menu")]
+    ])
+
+
+@router.message(CommandStart())
+async def start(message: types.Message):
+    await message.answer(
+        "Привет 👋\nВыбери, что тебя интересует:",
+        reply_markup=get_main_menu()
+    )
+
+
+# --- Обработка кнопки 'Главное меню' ---
+@router.callback_query(F.data == "show_main_menu")
+async def show_main_menu(callback: types.CallbackQuery):
+    await callback.message.answer(
+        "Выбери, что тебя интересует:",
+        reply_markup=get_main_menu()
+    )
 
 
 # --- Обработка кнопок погоды ---
@@ -85,7 +108,8 @@ async def send_weather(message: types.Message, action: str, city: str):
         data = await fetch_forecast(city, days=3)
         text = format_forecast(data)
 
-    await message.answer(text)
+    # После ответа показываем кнопку 'Главное меню'
+    await message.answer(text, reply_markup=get_back_to_menu_keyboard())
 
 
 # --- Обработка гифок ---
@@ -93,9 +117,10 @@ async def send_weather(message: types.Message, action: str, city: str):
 async def send_random_gif(callback: types.CallbackQuery):
     url = await fetch_random_gif()
     if url:
-        await callback.message.answer_animation(url)
+        await callback.message.answer_animation(url, reply_markup=get_back_to_menu_keyboard())
     else:
-        await callback.message.answer("Упс! Гифка сейчас недоступна, попробуй позже.")
+        await callback.message.answer("Упс! Гифка сейчас недоступна, попробуй позже.",
+                                      reply_markup=get_back_to_menu_keyboard())
 
 
 @router.callback_query(F.data == "gif_tag")
@@ -110,6 +135,7 @@ async def send_gif_by_tag(message: types.Message, state: FSMContext):
     url = await fetch_random_gif(tag)
     await state.clear()
     if url:
-        await message.answer_animation(url)
+        await message.answer_animation(url, reply_markup=get_back_to_menu_keyboard())
     else:
-        await message.answer("Увы, ничего не нашлось 😢 Попробуй другой тег.")
+        await message.answer("Увы, ничего не нашлось 😢 Попробуй другой тег.",
+                             reply_markup=get_back_to_menu_keyboard())
